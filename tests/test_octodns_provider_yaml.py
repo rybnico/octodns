@@ -4,6 +4,7 @@
 
 from os import makedirs
 from os.path import basename, dirname, isdir, isfile, join
+from shutil import copy
 from unittest import TestCase
 
 from helpers import TemporaryDirectory
@@ -18,7 +19,7 @@ from octodns.provider.yaml import (
     YamlProvider,
     _list_all_yaml_files,
 )
-from octodns.record import Create, NsValue, Record, ValuesMixin
+from octodns.record import Create, Delete, NsValue, Record, Update, ValuesMixin
 from octodns.zone import SubzoneRecordException, Zone
 
 
@@ -295,6 +296,92 @@ xn--dj-kia8a:
         self.assertTrue(source.supports(DummyType('A')))
         self.assertTrue(source.supports(DummyType(source)))
         self.assertTrue(source.supports(DummyType(self)))
+
+    def test_populate_load_state(self):
+        provider = YamlProvider(
+            'test', join(dirname(__file__), 'config'), populate_load_state=True
+        )
+        zone = Zone('unit.tests.', [])
+        provider.populate(zone)
+        plan_unchanged = provider.plan(zone)
+        self.assertIsNone(plan_unchanged)
+        zone.add_record(
+            Record.new(
+                zone, 'new_record', {'ttl': 42, 'type': 'A', 'value': '1.1.1.1'}
+            )
+        )
+        plan_changed = provider.plan(zone)
+        self.assertEqual(
+            1, len([c for c in plan_changed.changes if isinstance(c, Create)])
+        )
+        with TemporaryDirectory() as td:
+            target = YamlProvider(
+                'test', join(td.dirname, 'config'), populate_load_state=True
+            )
+            makedirs(join(td.dirname, 'config'))
+            copy(
+                join(dirname(__file__), 'config/unit.tests.yaml'),
+                join(td.dirname, 'config'),
+            )
+            changed_zone = Zone('unit.tests.', [])
+            provider.populate(changed_zone)
+            for record in changed_zone.records:
+                if record.name == 'www':
+                    record.ttl = 42
+                    changed_zone.add_record(record, replace=True)
+                    break
+            plan_changed = target.plan(changed_zone)
+            self.assertEqual(
+                1,
+                len([c for c in plan_changed.changes if isinstance(c, Update)]),
+            )
+            apply_changed = target.apply(plan_changed)
+            self.assertEqual(1, apply_changed)
+
+            empty_zone = Zone('unit.tests.', [])
+            plan_empty = target.plan(empty_zone)
+            self.assertEqual(
+                22,
+                len([c for c in plan_empty.changes if isinstance(c, Delete)]),
+            )
+            apply_empty = target.apply(plan_empty)
+            self.assertEqual(22, apply_empty)
+
+            yaml_file = join(td.dirname, 'config/unit.tests.yaml')
+            self.assertTrue(isfile(yaml_file))
+            with open(yaml_file) as fh:
+                data = safe_load(fh.read())
+                self.assertEqual(data, {})
+
+            new_zone = Zone('new.zone.', [])
+            new_zone.add_record(
+                Record.new(
+                    zone,
+                    'new_record',
+                    {'ttl': 42, 'type': 'A', 'value': '1.1.1.1'},
+                )
+            )
+            plan_new = target.plan(new_zone)
+            self.assertEqual(
+                1, len([c for c in plan_new.changes if isinstance(c, Create)])
+            )
+            apply_new = target.apply(plan_new)
+            self.assertEqual(1, apply_new)
+
+            yaml_file = join(td.dirname, 'config/new.zone.yaml')
+            self.assertTrue(isfile(yaml_file))
+            with open(yaml_file) as fh:
+                data = safe_load(fh.read())
+                self.assertDictEqual(
+                    data,
+                    {
+                        'new_record': {
+                            'ttl': 42,
+                            'type': 'A',
+                            'value': '1.1.1.1',
+                        }
+                    },
+                )
 
 
 class TestSplitYamlProvider(TestCase):

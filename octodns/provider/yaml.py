@@ -26,10 +26,13 @@ class YamlProvider(BaseProvider):
         default_ttl: 3600
         # Whether or not to enforce sorting order on the yaml config
         # (optional, default True)
-        enforce_order: true
+        enforce_order: True
         # Whether duplicate records should replace rather than error
-        # (optiona, default False)
+        # (optional, default False)
         populate_should_replace: false
+        # Whether to read existing state from the yaml files
+        # (optional, default False)
+        populate_load_state: False
 
     Overriding values can be accomplished using multiple yaml providers in the
     `sources` list where subsequent providers have `populate_should_replace`
@@ -113,6 +116,7 @@ class YamlProvider(BaseProvider):
         default_ttl=3600,
         enforce_order=True,
         populate_should_replace=False,
+        populate_load_state=False,
         supports_root_ns=True,
         *args,
         **kwargs,
@@ -133,6 +137,7 @@ class YamlProvider(BaseProvider):
         self.default_ttl = default_ttl
         self.enforce_order = enforce_order
         self.populate_should_replace = populate_should_replace
+        self.populate_load_state = populate_load_state
         self.supports_root_ns = supports_root_ns
 
     def copy(self):
@@ -162,26 +167,32 @@ class YamlProvider(BaseProvider):
         return self.supports_root_ns
 
     def _populate_from_file(self, filename, zone, lenient):
-        with open(filename, 'r') as fh:
-            yaml_data = safe_load(fh, enforce_order=self.enforce_order)
-            if yaml_data:
-                for name, data in yaml_data.items():
-                    if not isinstance(data, list):
-                        data = [data]
-                    for d in data:
-                        if 'ttl' not in d:
-                            d['ttl'] = self.default_ttl
-                        record = Record.new(
-                            zone, name, d, source=self, lenient=lenient
-                        )
-                        zone.add_record(
-                            record,
-                            lenient=lenient,
-                            replace=self.populate_should_replace,
-                        )
+        if not isfile(filename):
             self.log.debug(
-                '_populate_from_file: successfully loaded "%s"', filename
+                '_populate_from_file: file "%s" not found, assuming empty zone',
+                filename,
             )
+        else:
+            with open(filename, 'r') as fh:
+                yaml_data = safe_load(fh, enforce_order=self.enforce_order)
+                if yaml_data:
+                    for name, data in yaml_data.items():
+                        if not isinstance(data, list):
+                            data = [data]
+                        for d in data:
+                            if 'ttl' not in d:
+                                d['ttl'] = self.default_ttl
+                            record = Record.new(
+                                zone, name, d, source=self, lenient=lenient
+                            )
+                            zone.add_record(
+                                record,
+                                lenient=lenient,
+                                replace=self.populate_should_replace,
+                            )
+                self.log.debug(
+                    '_populate_from_file: successfully loaded "%s"', filename
+                )
 
     def get_filenames(self, zone):
         return (
@@ -197,9 +208,9 @@ class YamlProvider(BaseProvider):
             lenient,
         )
 
-        if target:
-            # When acting as a target we ignore any existing records so that we
-            # create a completely new copy
+        if target and not self.populate_load_state:
+            # When acting as a target and populate_load_state is False (which is the default)
+            # we ignore any existing records so that we create a completely new copy
             return False
 
         before = len(zone.records)
@@ -235,9 +246,12 @@ class YamlProvider(BaseProvider):
             desired.decoded_name,
             len(changes),
         )
-        # Since we don't have existing we'll only see creates
-        records = [c.new for c in changes]
-        # Order things alphabetically (records sort that way
+        # Since we're always writing out the whole zone, we can just use
+        # plan.desired, excluding any that are excluded or ignored
+        records = [
+            r for r in desired.records if not r.excluded and not r.ignored
+        ]
+        # Order things alphabetically (records sort that way)
         records.sort()
         data = defaultdict(list)
         for record in records:
