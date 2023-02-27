@@ -49,6 +49,7 @@ $ cd dns
 $ python -m venv env
 ...
 $ source env/bin/activate
+# provider-specific-requiremnts would be things like: octodns-route53 octodns-azure
 $ pip install octodns <provider-specific-requirements>
 $ mkdir config
 ```
@@ -83,7 +84,7 @@ providers:
     username: 'username'
     password: env/DYN_PASSWORD
   route53:
-    class: octodns.provider.route53.Route53Provider
+    class: octodns_route53.Route53Provider
     access_key_id: env/AWS_ACCESS_KEY_ID
     secret_access_key: env/AWS_SECRET_ACCESS_KEY
 
@@ -198,7 +199,7 @@ The above command pulled the existing data out of Route53 and placed the results
 
 ## Providers
 
-The table below lists the providers octoDNS supports. They are maintained in their own repositories and released as independent modules. 
+The table below lists the providers octoDNS supports. They are maintained in their own repositories and released as independent modules.
 
 | Provider | Module | Notes |
 |--|--|--|
@@ -293,7 +294,7 @@ Most of the things included in OctoDNS are providers, the obvious difference bei
 
 The `class` key in the providers config section can be used to point to arbitrary classes in the python path so internal or 3rd party providers can easily be included with no coordination beyond getting them into PYTHONPATH, most likely installed into the virtualenv with OctoDNS.
 
-For examples of building third-party sources and providers, see [Related Projects & Resources](#related-projects--resources).
+For examples of building third-party sources and providers, see [Related Projects & Resources](#related-projects-and-resources).
 
 ## Other Uses
 
@@ -369,8 +370,9 @@ If you have a problem or suggestion, please [open an issue](https://github.com/o
   - [`doddo/octodns-lexicon`](https://github.com/doddo/octodns-lexicon): Use [Lexicon](https://github.com/AnalogJ/lexicon) providers as octoDNS providers.
   - [`asyncon/octoblox`](https://github.com/asyncon/octoblox): [Infoblox](https://www.infoblox.com/) provider.
   - [`sukiyaki/octodns-netbox`](https://github.com/sukiyaki/octodns-netbox): [NetBox](https://github.com/netbox-community/netbox) source.
-  - [`jcollie/octodns-netbox-dns`](https://github.com/jcollie/octodns-netbox-dns): [NetBox-DNS Plugin](https://github.com/auroraresearchlab/netbox-dns) provider. 
+  - [`jcollie/octodns-netbox-dns`](https://github.com/jcollie/octodns-netbox-dns): [NetBox-DNS Plugin](https://github.com/auroraresearchlab/netbox-dns) provider.
   - [`kompetenzbolzen/octodns-custom-provider`](https://github.com/kompetenzbolzen/octodns-custom-provider): zonefile provider & phpIPAM source.
+  - [`Financial-Times/octodns-fastly`](https://github.com/Financial-Times/octodns-fastly): An OctoDNS source for Fastly.
 - **Resources.**
   - Article: [Visualising DNS records with Neo4j](https://medium.com/@costask/querying-and-visualising-octodns-records-with-neo4j-f4f72ab2d474) + code
   - Video: [FOSDEM 2019 - DNS as code with octodns](https://archive.fosdem.org/2019/schedule/event/dns_octodns/)
