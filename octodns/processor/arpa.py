@@ -11,16 +11,12 @@ from .base import BaseProcessor
 
 
 class AutoArpa(BaseProcessor):
-    def __init__(self, name, ttl=3600, populate_should_replace=False):
+    def __init__(self, name, ttl=3600, replace=False):
         super().__init__(name)
         self.log = getLogger(f'AutoArpa[{name}]')
-        self.log.info(
-            '__init__: ttl=%d, populate_should_replace=%s',
-            ttl,
-            populate_should_replace,
-        )
+        self.log.info('__init__: ttl=%d, replace=%s', ttl, replace)
         self.ttl = ttl
-        self.populate_should_replace = populate_should_replace
+        self.replace = replace
         self._records = defaultdict(set)
 
     def process_source_zone(self, desired, sources):
@@ -62,7 +58,7 @@ class AutoArpa(BaseProcessor):
                     name,
                     {'ttl': self.ttl, 'type': 'PTR', 'values': fqdns},
                 )
-                zone.add_record(record, replace=self.populate_should_replace)
+                zone.add_record(record, replace=self.replace)
 
         self.log.info(
             'populate:   found %s records', len(zone.records) - before
