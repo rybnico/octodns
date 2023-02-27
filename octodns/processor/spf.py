@@ -2,11 +2,11 @@
 #
 #
 
+import re
 from logging import getLogger
 from typing import Optional
 
 import dns.resolver
-from dns.resolver import Answer
 
 from octodns.record.base import Record
 
@@ -64,30 +64,23 @@ class SpfDnsLookupProcessor(BaseProcessor):
             f"_get_spf_from_txt_values: record={record.fqdn} values={values}"
         )
 
-        # SPF values to validate will begin with 'v=spf1 '
+        # SPF values must begin with 'v=spf1 '
         spf = [value for value in values if value.startswith('v=spf1 ')]
 
-        # No SPF values in the TXT record
         if len(spf) == 0:
             return None
 
-        # More than one SPF value resolves as "permerror", https://datatracker.ietf.org/doc/html/rfc7208#section-4.5
         if len(spf) > 1:
             raise SpfValueException(
                 f"{record.fqdn} has more than one SPF value in the TXT record"
             )
 
-        return spf[0]
+        match = re.search(r"(v=spf1\s.+(?:all|redirect=))", "".join(values))
 
-    def _process_answer(self, answer: Answer) -> list[str]:
-        values = []
+        if match is None:
+            raise SpfValueException(f"{record.fqdn} has an invalid SPF value")
 
-        for value in answer:
-            text_value = value.to_text()
-            processed_value = text_value[1:-1].replace('" "', '')
-            values.append(processed_value)
-
-        return values
+        return match.group()
 
     def _check_dns_lookups(
         self, record: Record, values: list[str], lookups: int = 0
@@ -122,7 +115,7 @@ class SpfDnsLookupProcessor(BaseProcessor):
             if term.startswith('include:'):
                 domain = term.removeprefix('include:')
                 answer = dns.resolver.resolve(domain, 'TXT')
-                answer_values = self._process_answer(answer)
+                answer_values = [value.to_text()[1:-1] for value in answer]
                 lookups = self._check_dns_lookups(
                     record, answer_values, lookups
                 )
